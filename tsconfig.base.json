@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@galaxy/shared-types": ["packages/shared-types/src/index.ts"],
+      "@galaxy/shared-hooks": ["packages/shared-hooks/src/index.ts"]
+    }
+  }
+}

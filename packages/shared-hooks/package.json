@@ -1,0 +1,18 @@
+{
+  "name": "@galaxy/shared-hooks",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@galaxy/shared-types": "workspace:*",
+    "socket.io-client": "^4.8.1",
+    "zustand": "^5.0.3"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}
