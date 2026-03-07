@@ -1,0 +1,298 @@
+## 1. Primary Request and Intent
+
+The user is building a wedding interactive system called "The Galaxy Reception" with a frontend-only scope. The system has 4 phases:
+- **Phase 1 (ENTRY)**: Guest check-in, 3D galaxy visualization with orbit satellites
+- **Phase 2 (WARMUP)**: Danmu/photo upload, meteor stream on big screen
+- **Phase 3 (VIDEO)**: Video playback with floating danmu overlay
+- **Phase 4 (INTERACT)**: Slot machine lottery / comet strike animation
+- **Phase 5 (CLIMAX)**: Black hole convergence → mosaic reveal → digital souvenir
+
+The user requested:
+1. Feasibility analysis and architecture review
+2. A detailed implementation spec document (`FRONTEND_SPEC.md`)
+3. Cloud deployment (not LAN) with `wss://` and HTTPS
+4. Full frontend implementation with mock backend using simulated data
+5. Bug fixes as errors appeared during development
+6. Visual enhancement of the galaxy scene (user said "有些单调" - too monotonous)
+
+---
+
+## 2. Key Technical Concepts
+
+- **Monorepo**: pnpm workspaces + turborepo, packages share types and hooks
+- **Global State Machine**: Backend maintains `PhaseEnum` state, broadcasts to all clients via Socket.io; frontend never controls flow
+- **React Three Fiber (R3F)**: Three.js declarative wrapper for 3D galaxy scene
+- **Socket.io Singleton**: `globalThis.__galaxySocket` pattern to survive Vite HMR
+- **Canvas Sprite Text**: Offline text rendering using Canvas 2D API → `THREE.CanvasTexture` → `<sprite>`, replacing drei's `<Text>` which downloads Google Fonts
+- **Image Upload Pattern**: Canvas Blob compression → multipart/form-data POST (not Base64 via Socket) for cloud bandwidth efficiency
+- **Souvenir Polling**: `GET /api/souvenir/:guestId` polled every 2s, `status: 'pending'|'ready'`
+- **Orbit Configuration**: `ORBIT_CONFIG` in shared-types maps `orbitIndex (0-4)` to elliptical orbit parameters (radiusX, radiusZ, tilt, speed, color)
+- **AnimatePresence mode="sync"**: Avoids initial opacity:0 stuck state that `mode="wait"` caused
+
+---
+
+## 3. Files and Code Sections
+
+### `packages/shared-types/src/index.ts`
+Core type definitions shared across all apps. Contains `PhaseEnum`, `GuestTag`, `Guest`, `Danmu`, `Quest`, all Socket event interfaces, REST response types, and crucially `ORBIT_CONFIG`.
+
+**ORBIT_CONFIG (current values after enlargement):**
+```typescript
+export const ORBIT_CONFIG: Record<number, { radiusX: number; radiusZ: number; tilt: number; speed: number; color: string }> = {
+  0: { radiusX: 5.5,  radiusZ: 3.2,  tilt: 0.12, speed: 0.16, color: '#a78bfa' }, // groom_family
+  1: { radiusX: 7.5,  radiusZ: 4.4,  tilt: 0.28, speed: 0.12, color: '#f9a8d4' }, // bride_family
+  2: { radiusX: 9.5,  radiusZ: 5.6,  tilt: 0.42, speed: 0.09, color: '#6ee7b7' }, // groom_friend
+  3: { radiusX: 11.5, radiusZ: 6.8,  tilt: 0.18, speed: 0.07, color: '#fcd34d' }, // bride_friend
+  4: { radiusX: 13.5, radiusZ: 8.0,  tilt: 0.38, speed: 0.05, color: '#93c5fd' }, // colleague
+}
+```
+
+### `packages/shared-hooks/src/useSocket.ts`
+Socket.io singleton using `globalThis.__galaxySocket` to survive Vite HMR resets. Key fix: moved from module-level `let _socket` to globalThis.
+
+```typescript
+declare global {
+  var __galaxySocket: Socket | undefined
+}
+
+function getSocket(): Socket {
+  if (globalThis.__galaxySocket && !globalThis.__galaxySocket.disconnected) {
+    return globalThis.__galaxySocket
+  }
+  if (globalThis.__galaxySocket) {
+    globalThis.__galaxySocket.removeAllListeners()
+    globalThis.__galaxySocket.disconnect()
+  }
+  globalThis.__galaxySocket = io(SOCKET_URL, {
+    transports: ['websocket'],
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    autoConnect: true,
+  })
+  return globalThis.__galaxySocket
+}
+```
+
+### `packages/shared-hooks/src/useRoomState.ts`
+Subscribes to `room_state_sync`, `phase_changed`, `new_guest_added`, `new_danmu` events. Returns `{ phase, guests, danmuQueue, connected }`.
+
+### `apps/mock-server/src/index.mjs`
+Full Express + Socket.io mock backend. Key API endpoints:
+- `POST /api/checkin` → `{ guestId, avatarIndex, orbitIndex, guest }`
+- `POST /api/upload` → multer multipart → `{ url }`
+- `GET /api/souvenir/:guestId` → `{ status: 'ready', posterUrl: placeholder }`
+- `POST /api/admin/phase` → broadcasts `phase_changed` + `room_state_sync`
+- `POST /api/admin/draw` → broadcasts `draw_result`
+- `POST /api/admin/climax` → broadcasts `climax_start`
+- `POST /api/admin/quest` → broadcasts `quest_push`
+
+On socket `connection`, immediately emits `room_state_sync` for reconnection recovery.
+
+### `apps/bigscreen/src/App.tsx`
+Phase router using `AnimatePresence mode="sync"` (critical fix from `mode="wait"`):
+```typescript
+const fadeVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.8 } },
+  exit:    { opacity: 0, transition: { duration: 0.5 } },
+}
+// AnimatePresence mode="sync" prevents initial opacity:0 stuck state
+```
+
+### `apps/bigscreen/src/scenes/GalaxyScene.tsx`
+Camera position `[0, 5, 22]`, fov 55. Removed `<Environment preset="night" />` (was fetching from CDN). Uses 3 local pointLights instead:
+```typescript
+<ambientLight intensity={0.4} />
+<pointLight position={[0, 0, 0]} color="#f9a8d4" intensity={6} distance={20} />
+<pointLight position={[10, 5, 5]} color="#a78bfa" intensity={3} distance={30} />
+<pointLight position={[-10, -5, -5]} color="#6ee7b7" intensity={2} distance={30} />
+```
+
+### `apps/bigscreen/src/components/galaxy/SpriteText.tsx`
+**New file** - Canvas 2D text rendering to replace drei's `<Text>` (which downloads Google Fonts):
+```typescript
+export function SpriteText({ text, position, fontSize=48, color='#ffffff', scale=1 }: SpriteTextProps) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')!
+    ctx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    // ... measure, draw stroke + fill
+    return new THREE.CanvasTexture(canvas)
+  }, [text, fontSize, color])
+  return (
+    <sprite position={position} scale={[spriteW, spriteH, 1]}>
+      <spriteMaterial map={texture} transparent depthWrite={false} sizeAttenuation />
+    </sprite>
+  )
+}
+```
+
+### `apps/bigscreen/src/components/galaxy/StarCore.tsx`
+Enhanced with 3 glow sphere layers, 2 rotating rings, larger core (0.75 radius). Uses `SpriteText` instead of drei `<Text>`:
+```typescript
+// 最外层大光晕 (opacity 0.06, BackSide)
+// 中层光晕 (opacity 0.15, BackSide)
+// 核心光球 (emissiveIntensity: 2.5)
+// 光晕环1 (rotation [PI/2.2, 0.3, 0], torus r=1.4)
+// 光晕环2 (rotation [PI/2, 0.8, 0], torus r=1.8)
+// 3 pointLights: pink(12), purple(5), green(2)
+// SpriteText: scale=1.4, position=[0,1.4,0]
+```
+
+### `apps/bigscreen/src/components/galaxy/Starfield.tsx`
+Multi-layer orbit rings (3 layers per orbit for glow effect):
+```typescript
+// Layer 1: base glow opacity 0.12
+// Layer 2: main line opacity 0.55
+// Layer 3: white highlight opacity 0.18
+// Stars: 3000 particles, range 120 units
+```
+
+### `apps/bigscreen/src/components/galaxy/GuestSatellites.tsx`
+Uses `SpriteText` (scale=0.6, fontSize=36) instead of drei `<Text>`. Module-level `guestAngles` Map for orbit angle tracking.
+
+### `apps/bigscreen/src/scenes/StandbyScene.tsx`
+`STARS` array moved to module-level constant (not inside component) to fix React StrictMode double-render random position mismatch.
+
+### `apps/mobile/src/utils/imageCompress.ts`
+Canvas Blob compression (not Base64), returns Blob for multipart upload:
+```typescript
+export async function compressImageToBlob(file: File, maxKB = 500): Promise<Blob>
+export async function uploadPhoto(file: File, guestId: string): Promise<string>
+// Uses FormData with 'photo' blob + 'guestId' field
+// Does NOT set Content-Type manually (browser adds boundary automatically)
+```
+
+### `apps/mobile/src/views/DanmuView.tsx`
+3-second cooldown with visual progress bar. Upload flow: compress → POST upload → get URL → emit Socket `send_danmu` with URL only (no binary in Socket).
+
+### `CLAUDE.md`
+Project context document for AI continuity. Contains full project structure, tech stack, Socket event dictionary, REST API table, data models, ORBIT_CONFIG reference, file manifest with descriptions, admin curl examples, development conventions, and TODO list.
+
+---
+
+## 4. Errors and Fixes
+
+### Error 1: `framer-motion` not found in bigscreen
+- **Cause**: `framer-motion` was missing from `apps/bigscreen/package.json` dependencies
+- **Fix**: Added `"framer-motion": "^11.18.2"` to bigscreen dependencies, ran `pnpm install`
+
+### Error 2: Black screen + frequent WS disconnections
+- **Cause 1**: `AnimatePresence mode="wait"` caused initial `opacity:0` to get stuck (framer-motion v11 issue with multiple conditional children)
+- **Fix 1**: Changed to `mode="sync"`
+- **Cause 2**: Module-level `let _socket` was reset on every Vite HMR hot reload, creating new connections
+- **Fix 2**: Moved socket to `globalThis.__galaxySocket` which persists across HMR
+- **Cause 3**: `Math.random()` in StandbyScene JSX style props caused StrictMode double-render mismatch
+- **Fix 3**: Moved `STARS` array to module-level constant
+
+### Error 3: `Failed to load dikhololo_night_1k.hdr` (CDN timeout)
+- **Cause**: `<Environment preset="night" />` from drei fetches HDR from `raw.githack.com` at runtime
+- **Fix**: Removed `<Environment>`, replaced with 3 local `<pointLight>` components
+
+### Error 4: `Failed to fetch` font (troika-three-text)
+- **Cause**: drei's `<Text>` component uses `troika-three-text` which downloads Google Fonts at runtime
+- **Fix**: Created `SpriteText.tsx` using Canvas 2D API with system fonts (`PingFang SC`, `Microsoft YaHei`), replaced all `<Text>` usages
+
+### Error 5: Visual issues - galaxy too small, labels too large
+- **User feedback**: Screenshot showed "Lujing & 杨冬" text dominating the screen, orbits barely visible
+- **Fix**:
+  - StarCore label: `scale: 2.2 → 1.2`, position `y: 1.6 → 1.1`
+  - OrbitRing opacity: `0.25 → 0.5`
+  - Camera: `[0,8,18] fov:60 → [0,5,22] fov:55`
+  - GuestSatellite label: `scale: 0.9 → 0.6`, fontSize `40→36`
+
+### Error 6: `&amp;` rendered literally in Three.js Text
+- **Cause**: HTML entity `&amp;` was used in drei `<Text>` children, which renders as literal string in Three.js
+- **Fix**: Changed to plain `&`
+
+---
+
+## 5. Problem Solving
+
+**Solved:**
+- Full monorepo setup with pnpm workspaces (directory creation via Node.js write-file workaround since bash was unreliable on Windows)
+- All CDN dependencies eliminated (HDR environment, Google Fonts) - system is fully offline-capable
+- Socket.io singleton pattern that survives Vite HMR
+- Canvas-based text rendering as drop-in replacement for drei Text
+- Image upload pipeline: Canvas compression → Blob → multipart/form-data (not Base64)
+
+**Ongoing:**
+- Visual enhancement of galaxy scene - user said it looks monotonous, currently enlarging orbits and adding visual effects
+
+---
+
+## 6. All User Messages
+
+1. Initial design brief describing the 4-phase wedding system with "天马行空" creative direction, asking for feasibility analysis and implementation plan
+2. "从新输出" - asked to regenerate the output
+3. "输出到文件呀 另外现在只针对前端项目" - output to file, frontend only
+4. "我不用局域网 我会分别在云服务器上部署前端和后端" - switching from LAN to cloud deployment
+5. "现在基于实施规范 开始实施前端部分 需要后端部分先使用模拟数据" - start implementing frontend with mock backend
+6. Error report: `framer-motion` not found
+7. Error report: black screen + WS disconnections with stack traces
+8. Error report: HDR file fetch timeout from CDN
+9. "这是什么报错" - asking about the font fetch error
+10. "全屏效果，感觉有些单调 你有没有创意点的想法" - galaxy looks monotonous, wants creative improvements (with screenshot showing small galaxy, large text)
+11. "以实现的完整功能清单 帮我写到项目根目录claude.md文件下 方便后续ai开发 要求 能让ai快速了解本项目 和接入后续开发和调整" - write CLAUDE.md for AI context
+
+---
+
+## 7. Pending Tasks
+
+1. **CSS nebula background layer** - Add CSS radial gradient blobs behind the Three.js canvas to create depth
+2. **Bottom wedding info bar** - Add a DOM overlay with wedding date/venue info
+3. **Camera adjustment** - May need further tuning after orbit radius enlargement to `13.5` max
+4. **Admin Web UI** - Currently only curl commands, no web control panel
+5. **Blox avatar assets** - `packages/shared-assets/avatars/` directory needs 100+ PNG files from designer
+6. **Wedding video file** - Needs to be placed or CDN URL configured
+7. **Souvenir poster generation** - Mock returns placeholder, real backend needs sharp/canvas
+4. **Mosaic image generation** - Mock returns placeholder, real backend needs async generation
+5. **Comet strike lottery animation** - Only slot machine implemented, comet animation pending
+6. **Production Nginx config** - Referenced in FRONTEND_SPEC.md Chapter 2
+
+---
+
+## 8. Current Work
+
+Immediately before this summary, the assistant was working on **visual enhancement of the GalaxyScene** after the user said it looked monotonous. Three files were just updated:
+
+**`packages/shared-types/src/index.ts`** - ORBIT_CONFIG enlarged (radiusX from max 10 → max 13.5)
+
+**`apps/bigscreen/src/components/galaxy/Starfield.tsx`** - Rewritten with multi-layer orbit rings:
+```typescript
+// 3 layers per orbit ring:
+// Layer 1: base glow (opacity 0.12)
+// Layer 2: main colored line (opacity 0.55)
+// Layer 3: white highlight (opacity 0.18)
+// Stars increased to 3000, range 120 units
+```
+
+**`apps/bigscreen/src/components/galaxy/StarCore.tsx`** - Enhanced with:
+```typescript
+// glow2Ref: outer haze sphere r=2.2, opacity 0.06
+// glow1Ref: mid glow sphere r=1.3, opacity 0.15
+// coreRef: core sphere r=0.75 (was 0.6), emissiveIntensity 2.5
+// ring1Ref: torus r=1.4, rotation [PI/2.2, 0.3, 0]
+// ring2Ref: torus r=1.8, rotation [PI/2, 0.8, 0]
+// 3 point lights: pink(12), purple(5), green(2)
+// SpriteText scale=1.4
+```
+
+Still pending from this visual enhancement task:
+- CSS nebula background layer behind the canvas
+- Bottom wedding info bar
+
+---
+
+## 9. Optional Next Step
+
+Continue the visual enhancement work that was in progress. The next steps are:
+
+1. **Add CSS nebula background** to `GalaxyScene.tsx` - a `position: absolute` div layer behind the Canvas with radial gradient "nebula" blobs using CSS animations
+2. **Add bottom info bar** to `GalaxyScene.tsx` - wedding date and venue overlay
+
+From the most recent work context:
+> "添加 CSS 星云背景层" and "添加底部婚礼信息栏" were the remaining todos in the visual enhancement task
+
+The camera position `[0, 5, 22]` may also need adjustment now that max orbit radius is `13.5` (previously `10`) - the outermost orbit may be clipped. Consider moving camera to `[0, 4, 26]` or `[0, 6, 28]`.

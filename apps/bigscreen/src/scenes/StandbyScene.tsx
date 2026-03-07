@@ -1,4 +1,16 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
+
+// 星星数据在组件外预生成，避免每次渲染重新随机（StrictMode 双重渲染安全）
+const STAR_COUNT = 120
+const STARS = Array.from({ length: STAR_COUNT }, (_, i) => ({
+  id: i,
+  size:  Math.random() * 2 + 1,
+  left:  `${Math.random() * 100}%`,
+  top:   `${Math.random() * 100}%`,
+  dur:   Math.random() * 3 + 2,
+  delay: Math.random() * 4,
+}))
 
 export default function StandbyScene() {
   return (
@@ -8,36 +20,62 @@ export default function StandbyScene() {
       alignItems: 'center', justifyContent: 'center',
       background: 'radial-gradient(ellipse at center, #0d0d2b 0%, #000010 100%)',
       color: '#fff',
+      position: 'relative',
+      overflow: 'hidden',
     }}>
       {/* 背景星点 */}
-      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        {Array.from({ length: 120 }).map((_, i) => (
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {STARS.map(s => (
           <motion.div
-            key={i}
+            key={s.id}
             style={{
               position: 'absolute',
-              width: Math.random() * 2 + 1,
-              height: Math.random() * 2 + 1,
+              width: s.size,
+              height: s.size,
               borderRadius: '50%',
               background: '#fff',
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: s.left,
+              top: s.top,
             }}
             animate={{ opacity: [0.2, 1, 0.2] }}
-            transition={{ duration: Math.random() * 3 + 2, repeat: Infinity, delay: Math.random() * 4 }}
+            transition={{ duration: s.dur, repeat: Infinity, delay: s.delay }}
           />
         ))}
       </div>
+
+      {/* 脉冲光环（在标题后面，z-index 低）*/}
+      <motion.div
+        style={{
+          position: 'absolute',
+          width: 300, height: 300,
+          borderRadius: '50%',
+          border: '1px solid rgba(167,139,250,0.3)',
+          zIndex: 0,
+        }}
+        animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeOut' }}
+      />
+      <motion.div
+        style={{
+          position: 'absolute',
+          width: 300, height: 300,
+          borderRadius: '50%',
+          border: '1px solid rgba(249,168,212,0.3)',
+          zIndex: 0,
+        }}
+        animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeOut', delay: 1 }}
+      />
 
       {/* 主标题 */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1.5, ease: 'easeOut' }}
-        style={{ textAlign: 'center', zIndex: 1 }}
+        transition={{ duration: 1.2, ease: 'easeOut' }}
+        style={{ textAlign: 'center', zIndex: 1, position: 'relative' }}
       >
         <div style={{
-          fontSize: '1.2rem',
+          fontSize: '1.1rem',
           letterSpacing: '0.5em',
           color: '#a78bfa',
           marginBottom: '1.5rem',
@@ -58,36 +96,18 @@ export default function StandbyScene() {
           <br />
           &amp; 杨冬
         </div>
-        <div style={{ fontSize: '1.1rem', color: '#94a3b8', letterSpacing: '0.3em' }}>
+        <div style={{ fontSize: '1rem', color: '#94a3b8', letterSpacing: '0.3em' }}>
           扫码签到，加入我们的星系
         </div>
       </motion.div>
 
-      {/* 脉冲光环 */}
-      <motion.div
-        style={{
-          position: 'absolute',
-          width: 300, height: 300,
-          borderRadius: '50%',
-          border: '1px solid rgba(167,139,250,0.3)',
-        }}
-        animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
-        transition={{ duration: 3, repeat: Infinity, ease: 'easeOut' }}
-      />
-      <motion.div
-        style={{
-          position: 'absolute',
-          width: 300, height: 300,
-          borderRadius: '50%',
-          border: '1px solid rgba(249,168,212,0.3)',
-        }}
-        animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
-        transition={{ duration: 3, repeat: Infinity, ease: 'easeOut', delay: 1 }}
-      />
-
       {/* 底部提示 */}
       <motion.div
-        style={{ position: 'absolute', bottom: '3rem', color: '#475569', fontSize: '0.85rem' }}
+        style={{
+          position: 'absolute', bottom: '3rem',
+          color: '#475569', fontSize: '0.85rem',
+          zIndex: 1,
+        }}
         animate={{ opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 2.5, repeat: Infinity }}
       >
@@ -96,3 +116,4 @@ export default function StandbyScene() {
     </div>
   )
 }
+

@@ -102,11 +102,11 @@ export interface SouvenirResponse {
 // ─── 轨道配置（前端渲染用）────────────────────────────────────────────────────
 
 export const ORBIT_CONFIG: Record<number, { radiusX: number; radiusZ: number; tilt: number; speed: number; color: string }> = {
-  0: { radiusX: 4.0, radiusZ: 2.5, tilt: 0.1,  speed: 0.18, color: '#a78bfa' }, // groom_family
-  1: { radiusX: 5.5, radiusZ: 3.2, tilt: 0.25, speed: 0.14, color: '#f9a8d4' }, // bride_family
-  2: { radiusX: 7.0, radiusZ: 4.0, tilt: 0.4,  speed: 0.11, color: '#6ee7b7' }, // groom_friend
-  3: { radiusX: 8.5, radiusZ: 5.0, tilt: 0.15, speed: 0.09, color: '#fcd34d' }, // bride_friend
-  4: { radiusX: 10,  radiusZ: 6.0, tilt: 0.35, speed: 0.07, color: '#93c5fd' }, // colleague
+  0: { radiusX: 6.5,  radiusZ: 3.8,  tilt: 0.12, speed: 0.16, color: '#a78bfa' }, // groom_family
+  1: { radiusX: 10.0, radiusZ: 5.8,  tilt: 0.28, speed: 0.12, color: '#f9a8d4' }, // bride_family
+  2: { radiusX: 13.5, radiusZ: 7.8,  tilt: 0.42, speed: 0.09, color: '#6ee7b7' }, // groom_friend
+  3: { radiusX: 17.0, radiusZ: 9.8,  tilt: 0.18, speed: 0.07, color: '#fcd34d' }, // bride_friend
+  4: { radiusX: 20.5, radiusZ: 11.8, tilt: 0.38, speed: 0.05, color: '#93c5fd' }, // colleague
 }
 
 export const TAG_TO_ORBIT: Record<GuestTag, number> = {
@@ -116,3 +116,5 @@ export const TAG_TO_ORBIT: Record<GuestTag, number> = {
   bride_friend: 3,
   colleague:    4,
 }
+
+

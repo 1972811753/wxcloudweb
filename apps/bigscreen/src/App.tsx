@@ -8,10 +8,12 @@ import InteractScene from './scenes/InteractScene'
 import ClimaxScene   from './scenes/ClimaxScene'
 import ConnectionBadge from './components/ui/ConnectionBadge'
 
+// mode="sync" 替代 "wait"：不等待退出动画完成再进入，避免初始节点被卡住不显示
+// initial={false} 让首次渲染跳过 initial 状态，直接显示 animate 状态
 const fadeVariants = {
   initial: { opacity: 0 },
-  animate: { opacity: 1, transition: { duration: 1.2 } },
-  exit:    { opacity: 0, transition: { duration: 0.8 } },
+  animate: { opacity: 1, transition: { duration: 0.8 } },
+  exit:    { opacity: 0, transition: { duration: 0.5 } },
 }
 
 export default function App() {
@@ -21,7 +23,7 @@ export default function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#000010' }}>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         {phase === PhaseEnum.STANDBY && (
           <motion.div key="standby" {...fadeVariants} style={{ position: 'absolute', inset: 0 }}>
             <StandbyScene />
@@ -49,8 +51,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 连接状态角标（开发调试用，生产可隐藏） */}
       <ConnectionBadge connected={connected} guestCount={guests.length} phase={phase} />
     </div>
   )
 }
+
