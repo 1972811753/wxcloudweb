@@ -55,6 +55,9 @@ const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
+  // 延长心跳超时，防止 Canvas 销毁时主线程卡顿导致误判断线
+  pingTimeout:  60000,   // 默认 20000，改为 60s
+  pingInterval: 25000,   // 默认 25000，保持不变
 })
 
 app.use(cors())
@@ -245,3 +248,4 @@ httpServer.listen(PORT, () => {
 ╚════════════════════════════════════════╝
   `)
 })
+

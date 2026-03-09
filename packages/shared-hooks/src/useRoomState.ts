@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PhaseEnum, S2C_RoomStateSync, Guest, Danmu } from '@galaxy/shared-types'
 import { useSocket } from './useSocket'
 
@@ -10,7 +10,7 @@ export interface RoomState {
 }
 
 export function useRoomState(): RoomState {
-  const { on, socketRef } = useSocket()
+  const { socketRef } = useSocket()
   const [state, setState] = useState<RoomState>({
     phase: PhaseEnum.STANDBY,
     guests: [],
@@ -18,17 +18,29 @@ export function useRoomState(): RoomState {
     connected: false,
   })
 
+  // 用 ref 持有 setState，避免 effect 依赖 state 导致重复注册
+  const stateRef = useRef(state)
+  stateRef.current = state
+
   useEffect(() => {
+    // 直接从 globalThis 取单例，不依赖 socketRef 引用稳定性
     const socket = socketRef.current
 
-    const onConnect    = () => setState(s => ({ ...s, connected: true }))
-    const onDisconnect = () => setState(s => ({ ...s, connected: false }))
+    const onConnect = () => {
+      setState(s => ({ ...s, connected: true }))
+    }
 
-    socket.on('connect',    onConnect)
-    socket.on('disconnect', onDisconnect)
+    const onDisconnect = (reason: string) => {
+      console.warn('[Socket] disconnected:', reason)
+      setState(s => ({ ...s, connected: false }))
+      // transport close / server namespace disconnect 会自动重连
+      // 如果是服务端主动踢出，手动触发重连
+      if (reason === 'io server disconnect') {
+        socket.connect()
+      }
+    }
 
-    // 连接后服务端推送完整状态（断线重连恢复）
-    const offSync = on<S2C_RoomStateSync>('room_state_sync', (data) => {
+    const onRoomStateSync = (data: S2C_RoomStateSync) => {
       setState(s => ({
         ...s,
         phase:      data.phase,
@@ -36,38 +48,50 @@ export function useRoomState(): RoomState {
         danmuQueue: data.danmuQueue,
         connected:  true,
       }))
-    })
+    }
 
-    // 阶段变更
-    const offPhase = on<PhaseEnum>('phase_changed', (newPhase) => {
+    const onPhaseChanged = (newPhase: PhaseEnum) => {
       setState(s => ({ ...s, phase: newPhase }))
-    })
+    }
 
-    // 新嘉宾加入
-    const offGuest = on<{ guest: Guest }>('new_guest_added', ({ guest }) => {
+    const onNewGuest = ({ guest }: { guest: Guest }) => {
       setState(s => ({
         ...s,
         guests: [...s.guests.filter(g => g.id !== guest.id), guest],
       }))
-    })
+    }
 
-    // 新弹幕
-    const offDanmu = on<{ danmu: Danmu }>('new_danmu', ({ danmu }) => {
+    const onNewDanmu = ({ danmu }: { danmu: Danmu }) => {
       setState(s => ({
         ...s,
         danmuQueue: [...s.danmuQueue.slice(-199), danmu],
       }))
-    })
+    }
+
+    socket.on('connect',         onConnect)
+    socket.on('disconnect',      onDisconnect)
+    socket.on('room_state_sync', onRoomStateSync)
+    socket.on('phase_changed',   onPhaseChanged)
+    socket.on('new_guest_added', onNewGuest)
+    socket.on('new_danmu',       onNewDanmu)
+
+    // 如果挂载时已连接，同步一次 connected 状态
+    if (socket.connected) {
+      setState(s => ({ ...s, connected: true }))
+    }
 
     return () => {
-      socket.off('connect',    onConnect)
-      socket.off('disconnect', onDisconnect)
-      offSync()
-      offPhase()
-      offGuest()
-      offDanmu()
+      socket.off('connect',         onConnect)
+      socket.off('disconnect',      onDisconnect)
+      socket.off('room_state_sync', onRoomStateSync)
+      socket.off('phase_changed',   onPhaseChanged)
+      socket.off('new_guest_added', onNewGuest)
+      socket.off('new_danmu',       onNewDanmu)
     }
-  }, [on, socketRef])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // 空依赖：socket 单例生命周期与 tab 一致，只注册一次
 
   return state
 }
+
+

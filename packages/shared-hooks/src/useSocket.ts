@@ -30,6 +30,8 @@ function getSocket(): Socket {
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     autoConnect: true,
+    // 与服务端 pingTimeout 对齐，避免 Canvas 销毁时主线程短暂卡顿被误判断线
+    timeout: 60000,
   })
   return globalThis.__galaxySocket
 }
@@ -61,4 +63,5 @@ export function useSocket() {
 
   return { socketRef, emit, on }
 }
+
 

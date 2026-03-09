@@ -139,10 +139,10 @@ function makeNebulaTexture(
 
 // 星云团配置（四角分布，不覆盖中心）
 const NEBULA_CONFIGS = [
-  { x: -28, y:  4, z:  -6, sx: 30, sy: 18, color: [130, 80, 255]  as [number,number,number], seed: 1001 },
-  { x:  30, y: -3, z:   8, sx: 32, sy: 19, color: [240, 100, 170] as [number,number,number], seed: 2002 },
-  { x:   4, y: 10, z: -22, sx: 26, sy: 15, color: [80, 200, 160]  as [number,number,number], seed: 3003 },
-  { x: -16, y: -7, z:  14, sx: 22, sy: 13, color: [90,  50, 210]  as [number,number,number], seed: 4004 },
+  { x: -38, y:  6, z: -10, sx: 36, sy: 22, color: [130, 80, 255]  as [number,number,number], seed: 1001 },
+  { x:  40, y: -5, z:  12, sx: 38, sy: 23, color: [240, 100, 170] as [number,number,number], seed: 2002 },
+  { x:   8, y: 14, z: -32, sx: 30, sy: 18, color: [80, 200, 160]  as [number,number,number], seed: 3003 },
+  { x: -22, y:-10, z:  20, sx: 26, sy: 16, color: [90,  50, 210]  as [number,number,number], seed: 4004 },
 ]
 
 export function NebulaCloud() {
@@ -199,7 +199,7 @@ function buildOrbitPoints(cfg: typeof ORBIT_CONFIG[0], segments: number): THREE.
     const a = (i / segments) * Math.PI * 2
     pts.push(new THREE.Vector3(
       Math.cos(a) * cfg.radiusX,
-      Math.sin(a) * cfg.tilt * 3,
+      Math.sin(a) * cfg.tilt * 8,
       Math.sin(a) * cfg.radiusZ,
     ))
   }
@@ -233,6 +233,8 @@ export function OrbitRing({ orbitIndex }: OrbitRingProps) {
 
   return <primitive object={group} />
 }
+
+
 
 
 

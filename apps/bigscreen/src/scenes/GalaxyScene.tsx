@@ -36,8 +36,13 @@ export default function GalaxyScene({ phase, guests, danmuQueue }: GalaxyScenePr
       <style>{OVERLAY_STYLES}</style>
 
       {/* ── 3D Canvas（全部视觉效果在 Three.js 内部实现）── */}
+      {/*三个值的含义：*/}
+      {/*x=0：水平居中*/}
+      {/*y=6：相机高于星系平面 6 个单位（越大越俯视，越小越平视）*/}
+      {/*z=34：相机距离中心 34 个单位（越大越远，轨道越小）*/}
+      {/*fov=60 是视野角，越大看到的范围越宽但有透视变形。*/}
       <Canvas
-        camera={{ position: [0, 6, 34], fov: 60, near: 0.1, far: 300 }}
+        camera={{ position: [0, 29, 48], fov: 45, near: 0.1, far: 300 }}
         gl={{ antialias: true, alpha: false }}
         style={{
           position: 'absolute', inset: 0, zIndex: 1,
@@ -178,6 +183,8 @@ export default function GalaxyScene({ phase, guests, danmuQueue }: GalaxyScenePr
     </div>
   )
 }
+
+
 
 
 

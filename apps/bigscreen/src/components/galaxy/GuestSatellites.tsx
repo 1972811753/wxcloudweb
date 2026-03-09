@@ -42,7 +42,7 @@ function GuestNode({ guest }: { guest: Guest }) {
     if (groupRef.current) {
       groupRef.current.position.set(
         Math.cos(angle) * cfg.radiusX,
-        Math.sin(angle) * cfg.tilt * 2,
+        Math.sin(angle) * cfg.tilt * 8,   // 与 buildOrbitPoints 保持一致
         Math.sin(angle) * cfg.radiusZ,
       )
     }
@@ -52,30 +52,32 @@ function GuestNode({ guest }: { guest: Guest }) {
     <group ref={groupRef}>
       {/* 卫星球体 */}
       <mesh>
-        <sphereGeometry args={[0.18, 16, 16]} />
+        <sphereGeometry args={[0.35, 16, 16]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.8}
+          emissiveIntensity={1.2}
           roughness={0.3}
           metalness={0.6}
         />
       </mesh>
       {/* 微光晕 */}
       <mesh>
-        <sphereGeometry args={[0.26, 8, 8]} />
-        <meshStandardMaterial color={color} transparent opacity={0.12} side={THREE.BackSide} />
+        <sphereGeometry args={[0.55, 8, 8]} />
+        <meshStandardMaterial color={color} transparent opacity={0.15} side={THREE.BackSide} />
       </mesh>
-      {/* 名字标签（Canvas Sprite，完全离线）*/}
+      {/* 名字标签 */}
       <SpriteText
         text={guest.name}
-        position={[0, 0.38, 0]}
+        position={[0, 0.65, 0]}
         fontSize={36}
         color="#ffffff"
-        scale={0.3}
+        scale={0.55}
       />
     </group>
   )
 }
+
+
 
 
