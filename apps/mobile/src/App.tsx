@@ -1,12 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useRoomState } from '@galaxy/shared-hooks'
 import { PhaseEnum } from '@galaxy/shared-types'
-import StandbyView  from './views/StandbyView'
-import CheckinView  from './views/CheckinView'
-import DanmuView    from './views/DanmuView'
-import WatchView    from './views/WatchView'
-import QuestView    from './views/QuestView'
-import SouvenirView from './views/SouvenirView'
+import StandbyView   from './views/StandbyView'
+import CheckinView   from './views/CheckinView'
+import DanmuView     from './views/DanmuView'
+import VideoDanmuView from './views/VideoDanmuView'
+import QuestView     from './views/QuestView'
+import SouvenirView  from './views/SouvenirView'
 
 const slideVariants = {
   initial: { opacity: 0, y: 20 },
@@ -44,7 +44,7 @@ export default function App() {
         )}
         {phase === PhaseEnum.VIDEO && (
           <motion.div key="video" {...slideVariants}>
-            <WatchView message="视频播放中，请抬头观看大屏" />
+            <VideoDanmuView />
           </motion.div>
         )}
         {phase === PhaseEnum.INTERACT && (

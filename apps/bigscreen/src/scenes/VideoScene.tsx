@@ -12,9 +12,37 @@ export default function VideoScene({ danmuQueue }: VideoSceneProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    videoRef.current?.play().catch(() => {
-      // 自动播放被浏览器阻止时静默处理（需用户交互触发）
+    const video = videoRef.current
+    if (!video) return
+
+    const playVideo = () => {
+      video.play().catch(() => {})
+    }
+
+    const handleEnded = () => {
+      video.currentTime = 0
+      playVideo()
+    }
+
+    // 监听多种事件确保循环播放
+    video.addEventListener('ended', handleEnded)
+    video.addEventListener('pause', () => {
+      // 如果暂停但还没到结尾，检查是否已经结束
+      if (video.currentTime >= video.duration - 0.1) {
+        handleEnded()
+      }
     })
+
+    // 确保加载完成后播放
+    if (video.readyState >= 3) {
+      playVideo()
+    } else {
+      video.addEventListener('canplay', playVideo, { once: true })
+    }
+
+    return () => {
+      video.removeEventListener('ended', handleEnded)
+    }
   }, [])
 
   return (
@@ -25,6 +53,8 @@ export default function VideoScene({ danmuQueue }: VideoSceneProps) {
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
         playsInline
         controls={false}
+        loop
+        muted
       />
       {/* 弹幕层（视频模式：半透明）*/}
       <DanmuLayer danmuQueue={danmuQueue} videoMode />
