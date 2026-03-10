@@ -3,3 +3,5 @@ node_modules
 .env
 dist
 pnpm-lock.yaml
+apps/mock-server/uploads/*.mp4                                                                                        
+*.DS_Store
